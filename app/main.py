@@ -130,7 +130,12 @@ def fill_document(document_key: str, req: FillRequest):
         pdf_path = _docx_to_pdf(docx_path, tmp_path)
         pdf_bytes = pdf_path.read_bytes()
 
-    return Response(content=pdf_bytes, media_type="application/pdf")
+    filename = f"{document_key}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
 
 
 @app.get("/health")
