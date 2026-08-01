@@ -30,16 +30,19 @@ def _repl_once(xml: str, old: str, new: str, label: str) -> str:
 
 
 def fill_retribucion_flexible(xml: str, *, nombre: str, dni: str, fecha_dia: str, fecha_mes: str, fecha_anio: str) -> str:
+    # Nombre (declaración inicial, 45 guiones) — el placeholder está en gris (D0D5DD),
+    # hay que devolverlo a negro (1A1A1A) al rellenarlo.
     xml = _repl_once(
         xml,
-        '<w:t>_____________________________________________</w:t>',
-        f'<w:t>{nombre}</w:t>',
+        '<w:r><w:rPr><w:color w:val="D0D5DD"/></w:rPr><w:t>_____________________________________________</w:t></w:r>',
+        f'<w:r><w:rPr><w:color w:val="1A1A1A"/></w:rPr><w:t>{nombre}</w:t></w:r>',
         "nombre (45 guiones)",
     )
+    # DNI (16 guiones), mismo tratamiento de color
     xml = _repl_once(
         xml,
-        '<w:t>________________</w:t>',
-        f'<w:t>{dni}</w:t>',
+        '<w:r><w:rPr><w:color w:val="D0D5DD"/></w:rPr><w:t>________________</w:t></w:r>',
+        f'<w:r><w:rPr><w:color w:val="1A1A1A"/></w:rPr><w:t>{dni}</w:t></w:r>',
         "DNI (16 guiones)",
     )
     xml = _repl_once(
@@ -48,10 +51,11 @@ def fill_retribucion_flexible(xml: str, *, nombre: str, dni: str, fecha_dia: str
         f'<w:t xml:space="preserve">En Sant Cugat del Vallès, a {fecha_dia} de {fecha_mes} de {fecha_anio}.</w:t>',
         "fecha",
     )
+    # Nombre en la firma (23 guiones) — este run además lleva sz/szCs=20
     xml = _repl_once(
         xml,
-        '<w:t>_______________________</w:t>',
-        f'<w:t>{nombre}</w:t>',
+        '<w:r><w:rPr><w:color w:val="D0D5DD"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>_______________________</w:t></w:r>',
+        f'<w:r><w:rPr><w:color w:val="1A1A1A"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>{nombre}</w:t></w:r>',
         "nombre firma (23 guiones)",
     )
     return xml
