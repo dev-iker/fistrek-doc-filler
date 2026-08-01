@@ -1,0 +1,218 @@
+{
+  "name": "Fistrek - En firma - Generar y adjuntar documentos (ESQUELETO)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "fistrek-en-firma",
+        "options": {}
+      },
+      "id": "webhook_tt",
+      "name": "Webhook TT (stage update)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-1200, 0],
+      "notes": "PENDIENTE: configurar en TT el webhook real apuntando a esta URL, filtrando por el evento de cambio de stage. Revisar si TT permite filtrar por stage en origen o si hay que hacerlo en el nodo IF siguiente (más robusto)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "leftValue": "={{$json.body.to_stage_name}}",
+              "rightValue": "En firma",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "if_stage",
+      "name": "IF stage = En firma",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-960, 0],
+      "notes": "PENDIENTE: confirmar el nombre EXACTO del campo en el payload real del webhook de TT (aquí se asume 'to_stage_name', a validar con un payload de prueba, igual que se hizo en Behum)."
+    },
+    {
+      "parameters": {
+        "url": "=https://api.teamtailor.com/v1/candidates/{{$json.body.candidate_id}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Api-Version", "value": "20240404" }
+          ]
+        }
+      },
+      "id": "get_candidate",
+      "name": "GET Candidato TT",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-740, -80],
+      "notes": "Reutiliza la misma credencial httpHeaderAuth ya usada en los workflows de Behum. candidate_id sale del webhook, no de parsear la respuesta (lección aprendida en Behum)."
+    },
+    {
+      "parameters": {
+        "url": "=https://api.teamtailor.com/v1/candidates/{{$json.body.candidate_id}}/TODO_ficha_contratacion",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth"
+      },
+      "id": "get_ficha_contratacion",
+      "name": "GET Ficha de contratación (PENDIENTE endpoint real)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-740, 80],
+      "notes": "PENDIENTE CRÍTICO: no tenemos aún confirmado el endpoint/resource exacto para leer las respuestas del kit de entrevista 'Ficha de contratación' vía API. Hay que probarlo contra un candidato real antes de dar esto por válido. Placeholder de URL a sustituir."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normaliza los datos de candidato + ficha de contratación en un único objeto\n// que usaremos para rellenar los 5 documentos.\n// PENDIENTE: ajustar los paths reales una vez confirmado el endpoint de la ficha.\n\nconst candidato = $input.first().json; // respuesta de GET Candidato\nconst ficha = $node[\"GET Ficha de contratación (PENDIENTE endpoint real)\"].json;\n\nconst nombre = `${candidato.data.attributes['first-name']} ${candidato.data.attributes['last-name']}`;\n\n// TODO: mapear los nombres de campo reales del kit de entrevista una vez confirmados\nconst dni = ficha.dni; // placeholder\nconst puesto = ficha.puesto_trabajo; // placeholder\nconst fechaInicio = ficha.fecha_inicio; // formato TBD, viene como fecha de TT (ISO?)\n\nconst fecha = new Date(fechaInicio);\nconst meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];\n\nreturn [{\n  json: {\n    candidate_id: candidato.data.id,\n    nombre,\n    dni,\n    puesto,\n    empresa: 'ONESTAWAVE, S.L.',\n    fecha_dia: String(fecha.getDate()),\n    fecha_mes: meses[fecha.getMonth()],\n    fecha_anio: String(fecha.getFullYear()),\n    fecha: `${fecha.getDate()} de ${meses[fecha.getMonth()]} de ${fecha.getFullYear()}`,\n    fecha_lugar: 'Sant Cugat del Vallès'\n  }\n}];"
+      },
+      "id": "normalize_data",
+      "name": "Normalizar datos candidato",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-500, 0],
+      "notes": "Código de ejemplo, NO PROBADO contra datos reales. Los nombres de campo de la ficha (dni, puesto_trabajo, fecha_inicio) son placeholders."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fistrek-doc-filler:8000/v1/fill/retribucion_flexible",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { nombre: $json.nombre, dni: $json.dni, fecha_dia: $json.fecha_dia, fecha_mes: $json.fecha_mes, fecha_anio: $json.fecha_anio } }}",
+        "options": { "response": { "response": { "responseFormat": "file" } } }
+      },
+      "id": "fill_retribucion",
+      "name": "Rellenar Retribución Flexible",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-260, -320],
+      "notes": "URL del microservicio a ajustar según dónde se despliegue en Easypanel (nombre de servicio interno o dominio público)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fistrek-doc-filler:8000/v1/fill/confidencialidad",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { nombre: $json.nombre, dni: $json.dni, fecha: $json.fecha } }}",
+        "options": { "response": { "response": { "responseFormat": "file" } } }
+      },
+      "id": "fill_confidencialidad",
+      "name": "Rellenar Confidencialidad",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-260, -160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fistrek-doc-filler:8000/v1/fill/consentimiento_empleados",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { nombre: $json.nombre, dni: $json.dni, fecha: $json.fecha } }}",
+        "options": { "response": { "response": { "responseFormat": "file" } } }
+      },
+      "id": "fill_consentimiento",
+      "name": "Rellenar Consentimiento Empleados",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-260, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fistrek-doc-filler:8000/v1/fill/rml",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { empresa: $json.empresa, puesto: $json.puesto, nombre: $json.nombre, dni: $json.dni, fecha_lugar: $json.fecha_lugar, fecha_dia: $json.fecha_dia, fecha_mes: $json.fecha_mes, fecha_anio: $json.fecha_anio, consentimiento_si: true } }}",
+        "options": { "response": { "response": { "responseFormat": "file" } } }
+      },
+      "id": "fill_rml",
+      "name": "Rellenar RML",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-260, 160],
+      "notes": "consentimiento_si está fijado a 'true' según lo confirmado (siempre SI). Revisar si en algún momento deja de ser un valor fijo."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://fistrek-doc-filler:8000/v1/fill/acuse_acoso",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { nombre: $json.nombre, dni: $json.dni, fecha_lugar: $json.fecha_lugar, fecha_dia: $json.fecha_dia, fecha_mes: $json.fecha_mes, fecha_anio: $json.fecha_anio } }}",
+        "options": { "response": { "response": { "responseFormat": "file" } } }
+      },
+      "id": "fill_acuse",
+      "name": "Rellenar Acuse Protocolo Acoso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-260, 320]
+    },
+    {
+      "parameters": {},
+      "id": "merge_pdfs",
+      "name": "Merge (5 PDFs)",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [-20, 0],
+      "notes": "Configurar modo 'Combine' -> 'Multiplex' o similar para juntar los 5 items (uno por PDF) en un único stream de items antes de subir a TT. AJUSTAR número de inputs a 5 en el editor (aquí solo se representa el nodo)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.teamtailor.com/v1/files",
+        "sendBody": true,
+        "contentType": "multipart-form-data"
+      },
+      "id": "upload_file_tt",
+      "name": "POST /v1/files (TT) - por cada PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0],
+      "notes": "Mismo patrón validado en Behum: /v1/files (multipart) -> devuelve uri en un array top-level [{uri: ...}]. Ejecutar en modo 'once per item' para procesar los 5 PDFs del Merge."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.teamtailor.com/v1/uploads",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { data: { type: 'uploads', attributes: { url: $json.uri }, relationships: { candidate: { data: { type: 'candidates', id: $('Normalizar datos candidato').item.json.candidate_id } } } } } }}"
+      },
+      "id": "create_upload_tt",
+      "name": "POST /v1/uploads (TT)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 0],
+      "notes": "Igual que en Behum: usar 'url' (no 'file-url'), y NO mandar internal:true (da 500)."
+    }
+  ],
+  "connections": {
+    "Webhook TT (stage update)": { "main": [[{ "node": "IF stage = En firma", "type": "main", "index": 0 }]] },
+    "IF stage = En firma": { "main": [[{ "node": "GET Candidato TT", "type": "main", "index": 0 }, { "node": "GET Ficha de contratación (PENDIENTE endpoint real)", "type": "main", "index": 0 }]] },
+    "GET Candidato TT": { "main": [[{ "node": "Normalizar datos candidato", "type": "main", "index": 0 }]] },
+    "GET Ficha de contratación (PENDIENTE endpoint real)": { "main": [[{ "node": "Normalizar datos candidato", "type": "main", "index": 0 }]] },
+    "Normalizar datos candidato": {
+      "main": [[
+        { "node": "Rellenar Retribución Flexible", "type": "main", "index": 0 },
+        { "node": "Rellenar Confidencialidad", "type": "main", "index": 0 },
+        { "node": "Rellenar Consentimiento Empleados", "type": "main", "index": 0 },
+        { "node": "Rellenar RML", "type": "main", "index": 0 },
+        { "node": "Rellenar Acuse Protocolo Acoso", "type": "main", "index": 0 }
+      ]]
+    },
+    "Rellenar Retribución Flexible": { "main": [[{ "node": "Merge (5 PDFs)", "type": "main", "index": 0 }]] },
+    "Rellenar Confidencialidad": { "main": [[{ "node": "Merge (5 PDFs)", "type": "main", "index": 1 }]] },
+    "Rellenar Consentimiento Empleados": { "main": [[{ "node": "Merge (5 PDFs)", "type": "main", "index": 2 }]] },
+    "Rellenar RML": { "main": [[{ "node": "Merge (5 PDFs)", "type": "main", "index": 3 }]] },
+    "Rellenar Acuse Protocolo Acoso": { "main": [[{ "node": "Merge (5 PDFs)", "type": "main", "index": 4 }]] },
+    "Merge (5 PDFs)": { "main": [[{ "node": "POST /v1/files (TT) - por cada PDF", "type": "main", "index": 0 }]] },
+    "POST /v1/files (TT) - por cada PDF": { "main": [[{ "node": "POST /v1/uploads (TT)", "type": "main", "index": 0 }]] }
+  }
+}
