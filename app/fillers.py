@@ -151,31 +151,54 @@ def fill_rml(xml: str, *, empresa: str, puesto: str, nombre: str, dni: str, fech
     old_fdo = '<w:t>Fdo.:……………………………</w:t>'
     xml = xml[:idx_fdo1] + f'<w:t>Fdo.: {nombre}</w:t>' + xml[idx_fdo1 + len(old_fdo):]
 
-    # Casilla SI/NO de consentimiento (solo si consentimiento_si=True marcamos la de "SI")
+    # Casillas SI / NO de consentimiento — se marca UNA de las dos con una X,
+    # nunca las dos. tblpX identifica cada casilla de forma única (451=SI, 250=NO).
+    # NOTA: tblpX="250" de la casilla NO es un fix aplicado sobre el original
+    # (que traía tblpX="496" y partía visualmente la palabra "No" en "N" + caja + "o").
+    # Si se reemplaza la plantilla por una versión nueva del documento, hay que
+    # verificar de nuevo estos valores antes de que esta función vuelva a funcionar.
+    empty_run = ('<w:r><w:rPr><w:rFonts w:cs="Arial" w:ascii="Arial" w:hAnsi="Arial"/>'
+                 '<w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr></w:r>')
+    x_run = ('<w:r><w:rPr><w:rFonts w:cs="Arial" w:ascii="Arial" w:hAnsi="Arial"/><w:b/><w:bCs/>'
+             '<w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr><w:t>X</w:t></w:r>')
+
+    tbl_si = (
+        '<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" w:horzAnchor="text" w:leftFromText="141" '
+        'w:rightFromText="141" w:tblpX="451" w:tblpY="181"/><w:tblW w:w="299" w:type="dxa"/>'
+        '<w:jc w:val="start"/><w:tblInd w:w="70" w:type="dxa"/><w:tblLayout w:type="fixed"/>'
+        '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:start w:w="70" w:type="dxa"/>'
+        '<w:bottom w:w="0" w:type="dxa"/><w:end w:w="70" w:type="dxa"/></w:tblCellMar></w:tblPr>'
+        '<w:tblGrid><w:gridCol w:w="299"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="279" '
+        'w:hRule="atLeast"/></w:trPr><w:tc><w:tcPr><w:tcW w:w="299" w:type="dxa"/><w:tcBorders>'
+        '<w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+        '<w:start w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+        '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+        '<w:end w:val="single" w:sz="4" w:space="0" w:color="000000"/></w:tcBorders></w:tcPr>'
+        '<w:p><w:pPr><w:pStyle w:val="Normal"/><w:snapToGrid w:val="false"/><w:jc w:val="both"/>'
+        '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:sz w:val="16"/>'
+        f'<w:szCs w:val="16"/></w:rPr></w:pPr>{empty_run}</w:p></w:tc></w:tr></w:tbl>'
+    )
+    tbl_no = (
+        '<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" w:horzAnchor="text" w:leftFromText="141" '
+        'w:rightFromText="141" w:tblpX="250" w:tblpY="121"/><w:tblW w:w="300" w:type="dxa"/>'
+        '<w:jc w:val="start"/><w:tblInd w:w="70" w:type="dxa"/><w:tblLayout w:type="fixed"/>'
+        '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:start w:w="70" w:type="dxa"/>'
+        '<w:bottom w:w="0" w:type="dxa"/><w:end w:w="70" w:type="dxa"/></w:tblCellMar></w:tblPr>'
+        '<w:tblGrid><w:gridCol w:w="300"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="300" '
+        'w:hRule="atLeast"/></w:trPr><w:tc><w:tcPr><w:tcW w:w="300" w:type="dxa"/><w:tcBorders>'
+        '<w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+        '<w:start w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+        '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+        '<w:end w:val="single" w:sz="4" w:space="0" w:color="000000"/></w:tcBorders></w:tcPr>'
+        '<w:p><w:pPr><w:pStyle w:val="Normal"/><w:snapToGrid w:val="false"/><w:jc w:val="both"/>'
+        '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:sz w:val="16"/>'
+        f'<w:szCs w:val="16"/></w:rPr></w:pPr>{empty_run}</w:p></w:tc></w:tr></w:tbl>'
+    )
+
     if consentimiento_si:
-        old_tbl = (
-            '<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" w:horzAnchor="text" w:leftFromText="141" '
-            'w:rightFromText="141" w:tblpX="451" w:tblpY="181"/><w:tblW w:w="299" w:type="dxa"/>'
-            '<w:jc w:val="start"/><w:tblInd w:w="70" w:type="dxa"/><w:tblLayout w:type="fixed"/>'
-            '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:start w:w="70" w:type="dxa"/>'
-            '<w:bottom w:w="0" w:type="dxa"/><w:end w:w="70" w:type="dxa"/></w:tblCellMar></w:tblPr>'
-            '<w:tblGrid><w:gridCol w:w="299"/></w:tblGrid><w:tr><w:trPr><w:trHeight w:val="279" '
-            'w:hRule="atLeast"/></w:trPr><w:tc><w:tcPr><w:tcW w:w="299" w:type="dxa"/><w:tcBorders>'
-            '<w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
-            '<w:start w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
-            '<w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
-            '<w:end w:val="single" w:sz="4" w:space="0" w:color="000000"/></w:tcBorders></w:tcPr>'
-            '<w:p><w:pPr><w:pStyle w:val="Normal"/><w:snapToGrid w:val="false"/><w:jc w:val="both"/>'
-            '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:sz w:val="16"/>'
-            '<w:szCs w:val="16"/></w:rPr></w:pPr><w:r><w:rPr><w:rFonts w:cs="Arial" w:ascii="Arial" '
-            'w:hAnsi="Arial"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr></w:r></w:p></w:tc></w:tr></w:tbl>'
-        )
-        empty_run = ('<w:r><w:rPr><w:rFonts w:cs="Arial" w:ascii="Arial" w:hAnsi="Arial"/>'
-                      '<w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr></w:r>')
-        x_run = ('<w:r><w:rPr><w:rFonts w:cs="Arial" w:ascii="Arial" w:hAnsi="Arial"/><w:b/><w:bCs/>'
-                 '<w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr><w:t>X</w:t></w:r>')
-        new_tbl = old_tbl.replace(empty_run, x_run)
-        xml = _repl_once(xml, old_tbl, new_tbl, "casilla SI consentimiento")
+        xml = _repl_once(xml, tbl_si, tbl_si.replace(empty_run, x_run), "casilla SI consentimiento")
+    else:
+        xml = _repl_once(xml, tbl_no, tbl_no.replace(empty_run, x_run), "casilla NO consentimiento")
     return xml
 
 
