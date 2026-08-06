@@ -164,7 +164,7 @@ def fill_rml(xml: str, *, empresa: str, puesto: str, nombre: str, dni: str, fech
 
     tbl_si = (
         '<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" w:horzAnchor="text" w:leftFromText="141" '
-        'w:rightFromText="141" w:tblpX="451" w:tblpY="181"/><w:tblW w:w="299" w:type="dxa"/>'
+        'w:rightFromText="141" w:tblpX="250" w:tblpY="181"/><w:tblW w:w="299" w:type="dxa"/>'
         '<w:jc w:val="start"/><w:tblInd w:w="70" w:type="dxa"/><w:tblLayout w:type="fixed"/>'
         '<w:tblCellMar><w:top w:w="0" w:type="dxa"/><w:start w:w="70" w:type="dxa"/>'
         '<w:bottom w:w="0" w:type="dxa"/><w:end w:w="70" w:type="dxa"/></w:tblCellMar></w:tblPr>'
