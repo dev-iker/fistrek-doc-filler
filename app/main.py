@@ -54,6 +54,27 @@ class FillRequest(BaseModel):
     fecha_lugar: str | None = None
     consentimiento_si: bool = True    # solo aplica a "rml"
 
+    # Campos del Contrato de Trabajo
+    fecha_nacimiento: str | None = None
+    num_afiliacion_ss: str | None = None
+    nivel_formativo: str | None = None
+    nacionalidad: str | None = None
+    municipio_domicilio: str | None = None
+    grupo_profesional: str | None = None
+    funciones: str | None = None
+    periodo_prueba: str | None = None
+    salario: str | None = None
+    trabajo_a_distancia: bool = False
+
+    # Campos adicionales del OCR del DNI (no usados directamente por
+    # fill_contrato_trabajo hoy, pero aceptados para no romper el body
+    # que ya manda n8n)
+    nombre_dni: str | None = None
+    sexo: str | None = None
+    domicilio_calle: str | None = None
+    provincia_domicilio: str | None = None
+    pais_domicilio: str | None = None
+
 
 def _zip_dir(src_dir: Path, out_path: Path) -> None:
     if out_path.exists():
