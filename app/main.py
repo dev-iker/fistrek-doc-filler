@@ -66,19 +66,28 @@ def _zip_dir(src_dir: Path, out_path: Path) -> None:
 
 def _docx_to_pdf(docx_path: Path, out_dir: Path) -> Path:
     """
-    Conversión vía LibreOffice headless. Requiere `soffice` instalado en
-    el contenedor. Si se decide usar Stirling PDF en su lugar, sustituir
-    esta función por una llamada HTTP a su endpoint de conversión.
+    Conversión vía LibreOffice headless. Cada llamada usa un perfil de
+    usuario aislado (UserInstallation) para evitar bloqueos cuando hay
+    conversiones solapadas o restos de un perfil anterior corrupto.
     """
+    profile_dir = out_dir / f"lo_profile_{uuid.uuid4().hex}"
     result = subprocess.run(
-        ["soffice", "--headless", "--convert-to", "pdf", "--outdir", str(out_dir), str(docx_path)],
+        [
+            "soffice", "--headless", "--norestore",
+            f"-env:UserInstallation=file://{profile_dir}",
+            "--convert-to", "pdf", "--outdir", str(out_dir), str(docx_path),
+        ],
         capture_output=True, text=True, timeout=60,
     )
-    if result.returncode != 0:
-        raise HTTPException(status_code=500, detail=f"Fallo en conversión a PDF: {result.stderr}")
     pdf_path = out_dir / (docx_path.stem + ".pdf")
-    if not pdf_path.exists():
-        raise HTTPException(status_code=500, detail="LibreOffice no generó el PDF esperado")
+    if result.returncode != 0 or not pdf_path.exists():
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"Fallo en conversión a PDF (returncode={result.returncode}). "
+                f"stdout={result.stdout!r} stderr={result.stderr!r}"
+            ),
+        )
     return pdf_path
 
 
@@ -121,7 +130,12 @@ def fill_document(document_key: str, req: FillRequest):
         pdf_path = _docx_to_pdf(docx_path, tmp_path)
         pdf_bytes = pdf_path.read_bytes()
 
-    return Response(content=pdf_bytes, media_type="application/pdf")
+    filename = f"{document_key}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
 
 
 @app.get("/health")
