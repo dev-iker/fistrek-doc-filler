@@ -311,11 +311,21 @@ def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: 
     xml = insertar_en_vacio(xml, '3D984518', nacionalidad, "nacionalidad")
     xml = insertar_en_vacio(xml, '385B5284', municipio_domicilio, "municipio domicilio")
 
-    # El placeholder original traía "Times New Roman" harcodeado en el run,
-    # distinto a la fuente del resto de la tabla (Arial MT). Se quita el
-    # rFonts para que herede la misma fuente que nombre/DNI/municipio.
-    old_nivel = '<w:r><w:rPr><w:rFonts w:ascii="Times New Roman"/><w:sz w:val="16"/></w:rPr><w:t xml:space="preserve">  </w:t></w:r>'
-    new_nivel = f'<w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t xml:space="preserve">{_esc(nivel_formativo)}</w:t></w:r>'
+    # El placeholder original traía "Times New Roman" harcodeado en el run
+    # (distinto a la fuente del resto de la tabla) y le faltaba la sangría
+    # izquierda que sí tienen las celdas hermanas (nombre/DNI/municipio,
+    # w:ind w:left="71"). Se corrigen ambas cosas en el mismo reemplazo.
+    old_nivel = (
+        '<w:pPr><w:pStyle w:val="TableParagraph"/>'
+        '<w:rPr><w:rFonts w:ascii="Times New Roman"/><w:sz w:val="16"/></w:rPr></w:pPr>'
+        '<w:r><w:rPr><w:rFonts w:ascii="Times New Roman"/><w:sz w:val="16"/></w:rPr>'
+        '<w:t xml:space="preserve">  </w:t></w:r>'
+    )
+    new_nivel = (
+        '<w:pPr><w:pStyle w:val="TableParagraph"/><w:ind w:left="71"/>'
+        '<w:rPr><w:sz w:val="16"/></w:rPr></w:pPr>'
+        f'<w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t xml:space="preserve">{_esc(nivel_formativo)}</w:t></w:r>'
+    )
     xml = _repl_once(xml, old_nivel, new_nivel, "nivel formativo")
 
     # --- Cláusula PRIMERA: puesto, grupo profesional, funciones ---
