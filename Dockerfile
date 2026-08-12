@@ -7,6 +7,12 @@ RUN apt-get update && apt-get install -y \
     fonts-crosextra-caladea \
     && rm -rf /var/lib/apt/lists/*
 
+# Alias fontconfig "Arial MT" -> Liberation Sans (ver comentario dentro del
+# .conf). Sin esto, contrato_trabajo se renderiza en DejaVu Sans y se
+# deforma la paginación (notas al pie, checkboxes, páginas de más).
+COPY fonts/99-arial-mt-alias.conf /etc/fonts/conf.d/99-arial-mt-alias.conf
+RUN fc-cache -f
+
 WORKDIR /app
 
 COPY requirements.txt .
