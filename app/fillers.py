@@ -43,12 +43,28 @@ def _strip_decorative_marks(value: str) -> str:
 
     Se normaliza primero a NFC: cualquier acento español legítimo ya
     tiene forma precompuesta (á, é, í, ó, ú, ñ, ü son un único
-    codepoint), así que cualquier marca combinante (categoría Unicode
-    "Mn") que sobreviva a la normalización no es un acento real, es
-    decoración sobrante, y se elimina.
+    codepoint), así que cualquier marca combinante que sobreviva a la
+    normalización no es un acento real, es decoración sobrante, y se
+    elimina.
+
+    Se quitan las TRES categorías Unicode de "marca" (no solo "Mn"):
+    - Mn (Nonspacing Mark): el caso típico de tachado/subrayado hecho
+      con una marca que se dibuja sobre el carácter anterior sin
+      ocupar espacio propio (p.ej. U+0336 COMBINING LONG STROKE
+      OVERLAY, el que se genera con conversores de "texto tachado").
+    - Me (Enclosing Mark): variantes que dibujan un trazo o círculo
+      "envolviendo" el carácter (p.ej. U+20D2, U+20E5).
+    - Mc (Spacing Combining Mark): menos común para esto, pero se
+      incluye por seguridad ya que no aparece en ortografía española.
+    También se eliminan caracteres de ancho cero (U+200B-U+200D,
+    U+FEFF) que a veces acompañan a este tipo de texto "decorado".
     """
     normalized = unicodedata.normalize("NFC", value)
-    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+    zero_width = {"​", "‌", "‍", "﻿"}
+    return "".join(
+        ch for ch in normalized
+        if unicodedata.category(ch)[0] != "M" and ch not in zero_width
+    )
 
 
 def _esc(value: str) -> str:
