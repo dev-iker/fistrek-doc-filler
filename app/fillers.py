@@ -16,7 +16,8 @@ funciones vuelvan a funcionar, porque los huecos podrían estar
 fragmentados de otra manera.
 """
 import re
-from xml.sax.saxutils import escape as _esc
+import unicodedata
+from xml.sax.saxutils import escape as _xml_escape
 
 
 class FillError(Exception):
@@ -29,6 +30,31 @@ def _repl_once(xml: str, old: str, new: str, label: str) -> str:
     if n != 1:
         raise FillError(f"{label}: aparece {n} veces en la plantilla, se esperaba 1")
     return xml.replace(old, new, 1)
+
+
+def _strip_decorative_marks(value: str) -> str:
+    """
+    Quita "decoraciones" Unicode que a veces se cuelan en texto libre
+    (tachado/subrayado hechos con marcas combinantes tipo U+0336, o
+    "zalgo text"), copiadas de un origen con formato enriquecido (p.ej.
+    una respuesta de IA generada en n8n) que Word/LibreOffice SÍ sabe
+    renderizar aunque no sean tags XML reales — por eso escapar < > &
+    (ver `_esc`) no las neutraliza.
+
+    Se normaliza primero a NFC: cualquier acento español legítimo ya
+    tiene forma precompuesta (á, é, í, ó, ú, ñ, ü son un único
+    codepoint), así que cualquier marca combinante (categoría Unicode
+    "Mn") que sobreviva a la normalización no es un acento real, es
+    decoración sobrante, y se elimina.
+    """
+    normalized = unicodedata.normalize("NFC", value)
+    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+
+
+def _esc(value: str) -> str:
+    """Sanea (quita decoraciones Unicode) y escapa (& < >) texto libre
+    antes de insertarlo como contenido de un <w:t>."""
+    return _xml_escape(_strip_decorative_marks(value))
 
 
 def fill_retribucion_flexible(xml: str, *, nombre: str, dni: str, fecha_dia: str, fecha_mes: str, fecha_anio: str) -> str:
@@ -369,6 +395,34 @@ def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: 
         '<w:r><w:rPr><w:sz w:val="12"/></w:rPr><w:t>de 2026</w:t></w:r>'
     )
     xml = xml.replace(old_mes, new_mes)
+
+    # --- Salto de página forzado antes del bloque "INDEFINIDO ORDINARIO" /
+    # "CÓDIGO DE CONTRATO" ---
+    # Ese bloque (casilla "INDEFINIDO ORDINARIO" + tabla "CÓDIGO DE
+    # CONTRATO") se dibuja con formas ancladas a coordenadas ABSOLUTAS de
+    # página (w10:wrap/wp:anchor con relativeFrom="page"), calibradas
+    # asumiendo que el párrafo que las contiene cae justo al principio de
+    # una página. En la plantilla original esto ocurre "por casualidad"
+    # (no hay salto de página explícito): si el texto de "funciones" (u
+    # otro campo anterior) ocupa más o menos líneas de las previstas,
+    # todo el contenido se repagina y ese párrafo deja de caer al
+    # principio de página, con lo que la casilla y la tabla quedan
+    # dibujadas en un sitio distinto al del texto que las acompaña
+    # (descoloque visual, confirmado con datos de funciones largos).
+    # Forzar el salto de página aquí garantiza que el bloque siempre
+    # empiece en la parte superior de una página nueva, sea cual sea la
+    # longitud del contenido anterior.
+    old_break_anchor = (
+        '<w:p w14:paraId="46C937E3" w14:textId="77777777" w:rsidR="00FE6C63" '
+        'w:rsidRDefault="00836B5C"><w:pPr><w:pStyle w:val="Textoindependiente"/>'
+        '<w:rPr><w:sz w:val="20"/></w:rPr></w:pPr>'
+    )
+    new_break_anchor = (
+        '<w:p w14:paraId="46C937E3" w14:textId="77777777" w:rsidR="00FE6C63" '
+        'w:rsidRDefault="00836B5C"><w:pPr><w:pStyle w:val="Textoindependiente"/>'
+        '<w:pageBreakBefore/><w:rPr><w:sz w:val="20"/></w:rPr></w:pPr>'
+    )
+    xml = _repl_once(xml, old_break_anchor, new_break_anchor, "salto de página INDEFINIDO ORDINARIO/CÓDIGO DE CONTRATO")
 
     return xml
 
