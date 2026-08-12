@@ -16,6 +16,7 @@ funciones vuelvan a funcionar, porque los huecos podrían estar
 fragmentados de otra manera.
 """
 import re
+from xml.sax.saxutils import escape as _esc
 
 
 class FillError(Exception):
@@ -257,7 +258,7 @@ def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: 
         m = re.search(rf'(<w:p w14:paraId="{paraId}"[^>]*>.*?)(</w:p>)', xml, re.DOTALL)
         if not m:
             raise FillError(f"{label}: no se encontró el paraId {paraId}")
-        nuevo_run = f'<w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>{valor}</w:t></w:r>'
+        nuevo_run = f'<w:r><w:rPr><w:sz w:val="16"/></w:rPr><w:t>{_esc(valor)}</w:t></w:r>'
         nuevo_para = m.group(1) + nuevo_run + m.group(2)
         return _repl_once(xml, m.group(0), nuevo_para, label)
 
@@ -269,14 +270,14 @@ def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: 
     xml = insertar_en_vacio(xml, '385B5284', municipio_domicilio, "municipio domicilio")
 
     old_nivel = '<w:r><w:rPr><w:rFonts w:ascii="Times New Roman"/><w:sz w:val="16"/></w:rPr><w:t xml:space="preserve">  </w:t></w:r>'
-    new_nivel = f'<w:r><w:rPr><w:rFonts w:ascii="Times New Roman"/><w:sz w:val="16"/></w:rPr><w:t xml:space="preserve">{nivel_formativo}</w:t></w:r>'
+    new_nivel = f'<w:r><w:rPr><w:rFonts w:ascii="Times New Roman"/><w:sz w:val="16"/></w:rPr><w:t xml:space="preserve">{_esc(nivel_formativo)}</w:t></w:r>'
     xml = _repl_once(xml, old_nivel, new_nivel, "nivel formativo")
 
     # --- Cláusula PRIMERA: puesto, grupo profesional, funciones ---
     old_puesto = '<w:r><w:rPr><w:sz w:val="18"/><w:u w:val="single"/></w:rPr><w:tab/><w:t>.</w:t></w:r>'
     new_puesto = (
         f'<w:r><w:rPr><w:sz w:val="18"/><w:u w:val="single"/></w:rPr>'
-        f'<w:t xml:space="preserve"> {puesto}</w:t></w:r>'
+        f'<w:t xml:space="preserve"> {_esc(puesto)}</w:t></w:r>'
         f'<w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t>.</w:t></w:r>'
     )
     xml = _repl_once(xml, old_puesto, new_puesto, "puesto (cláusula primera)")
@@ -287,11 +288,15 @@ def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: 
         '<w:r><w:rPr><w:spacing w:val="80"/><w:sz w:val="18"/><w:u w:val="single"/></w:rPr>'
         '<w:t xml:space="preserve">  </w:t></w:r>'
     )
-    new_grupo = f'<w:r><w:rPr><w:sz w:val="18"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">{grupo_profesional}</w:t></w:r>'
+    new_grupo = f'<w:r><w:rPr><w:sz w:val="18"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">{_esc(grupo_profesional)}</w:t></w:r>'
     xml = _repl_once(xml, old_grupo, new_grupo, "grupo profesional")
 
+    # Se escapa el texto libre de "funciones" para que, si llegara con marcado
+    # (p.ej. restos de formato tipo tachado copiados de otra fuente), se inserte
+    # como texto literal en vez de ser interpretado como XML del documento.
     old_funciones = '<w:t>. para la realización de las funciones (4)</w:t><w:tab/><w:tab/><w:t xml:space="preserve">. de acuerdo'
-    new_funciones = f'<w:t xml:space="preserve">. para la realización de las funciones (4) {funciones}</w:t><w:t xml:space="preserve">. de acuerdo'
+    funciones_sin_punto = _esc(funciones.rstrip().rstrip("."))
+    new_funciones = f'<w:t xml:space="preserve">. para la realización de las funciones (4) {funciones_sin_punto}</w:t><w:t xml:space="preserve">. de acuerdo'
     xml = _repl_once(xml, old_funciones, new_funciones, "funciones del puesto")
 
     # --- Checkbox "Trabajo a distancia" (mecanismo VML, no tabla) ---
@@ -308,7 +313,7 @@ def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: 
     old_fecha_inicio = '<w:t xml:space="preserve">fecha </w:t></w:r><w:r><w:rPr><w:sz w:val="18"/><w:u w:val="single"/></w:rPr><w:t>,</w:t></w:r>'
     new_fecha_inicio = (
         f'<w:t xml:space="preserve">fecha </w:t></w:r>'
-        f'<w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve">{fecha_dia} de {fecha_mes} de {fecha_anio}</w:t></w:r>'
+        f'<w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve">{_esc(fecha_dia)} de {_esc(fecha_mes)} de {_esc(fecha_anio)}</w:t></w:r>'
         f'<w:r><w:rPr><w:sz w:val="18"/></w:rPr><w:t>,</w:t></w:r>'
     )
     xml = _repl_once(xml, old_fecha_inicio, new_fecha_inicio, "fecha de inicio")
@@ -318,7 +323,7 @@ def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: 
         '<w:t xml:space="preserve"> </w:t></w:r>'
         '<w:r><w:rPr><w:sz w:val="18"/><w:u w:val="single"/></w:rPr><w:tab/></w:r>'
     )
-    new_periodo = f'<w:r><w:rPr><w:sz w:val="18"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">{periodo_prueba} meses</w:t></w:r>'
+    new_periodo = f'<w:r><w:rPr><w:sz w:val="18"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">{_esc(periodo_prueba)} meses</w:t></w:r>'
     xml = _repl_once(xml, old_periodo, new_periodo, "período de prueba")
 
     # --- Cláusula QUINTA: salario ---
@@ -329,7 +334,7 @@ def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: 
     )
     new_salario = (
         '<w:t xml:space="preserve">: el/la trabajador/a percibirá una retribución total de </w:t></w:r>'
-        f'<w:r><w:rPr><w:sz w:val="18"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">{salario}</w:t></w:r>'
+        f'<w:r><w:rPr><w:sz w:val="18"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">{_esc(salario)}</w:t></w:r>'
     )
     xml = _repl_once(xml, old_salario, new_salario, "salario")
 
@@ -345,11 +350,11 @@ def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: 
 
     # --- Fecha de firma (aparece 2 veces: contrato base + anexo de cláusulas adicionales) ---
     old_dia1 = '<w:t xml:space="preserve">a  de</w:t>'
-    new_dia1 = f'<w:t xml:space="preserve">a {fecha_dia} de</w:t>'
+    new_dia1 = f'<w:t xml:space="preserve">a {_esc(fecha_dia)} de</w:t>'
     xml = _repl_once(xml, old_dia1, new_dia1, "día firma (bloque 1)")
 
     old_dia2 = '<w:t xml:space="preserve">a  de </w:t>'
-    new_dia2 = f'<w:t xml:space="preserve">a {fecha_dia} de </w:t>'
+    new_dia2 = f'<w:t xml:space="preserve">a {_esc(fecha_dia)} de </w:t>'
     xml = _repl_once(xml, old_dia2, new_dia2, "día firma (bloque 2)")
 
     old_mes = (
@@ -360,7 +365,7 @@ def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: 
     if n_mes != 2:
         raise FillError(f"mes firma: aparece {n_mes} veces en la plantilla, se esperaban 2")
     new_mes = (
-        f'<w:r><w:rPr><w:sz w:val="12"/></w:rPr><w:t xml:space="preserve"> {fecha_mes} </w:t></w:r>'
+        f'<w:r><w:rPr><w:sz w:val="12"/></w:rPr><w:t xml:space="preserve"> {_esc(fecha_mes)} </w:t></w:r>'
         '<w:r><w:rPr><w:sz w:val="12"/></w:rPr><w:t>de 2026</w:t></w:r>'
     )
     xml = xml.replace(old_mes, new_mes)
