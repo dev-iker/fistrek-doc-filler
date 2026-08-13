@@ -153,6 +153,53 @@ síntoma de métricas de fuente — por eso borrar formas de la plantilla
 fue un error. Ante cualquier glitch de layout, comprobar primero
 `pdffonts` contra las fuentes que pide `word/fontTable.xml`.
 
+### RESUELTO (12/08/2026): "NIVEL FORMATIVO" con fuente y sangría distintas al resto de la tabla
+
+En `fill_contrato_trabajo`, el hueco de `nivel_formativo` (mecanismo 2,
+párrafo de tabla vacío) tenía en la propia plantilla un run placeholder
+con `<w:rFonts w:ascii="Times New Roman"/>` harcodeado y sin
+`<w:ind w:left="71"/>` en el `<w:pPr>`, a diferencia de sus celdas
+hermanas (nombre, DNI, municipio) que no fijan fuente (heredan Arial MT)
+y sí llevan esa sangría. Resultado: el valor rellenado salía en Times
+New Roman y pegado al borde izquierdo de la celda, distinto al resto.
+
+**Fix**: al reemplazar el placeholder, se quita el `w:rFonts` (hereda la
+fuente del documento) y se añade `<w:ind w:left="71"/>` al `pPr` del
+párrafo, igual que las celdas hermanas.
+
+### RESUELTO (12/08/2026): rayas de subrayado fantasma sobre el texto de "funciones" cuando es largo
+
+Con `funciones` largo (varias líneas), aparecían dos segmentos con
+subrayado en mitad del texto (p. ej. bajo "procesos productivos. Análisis
+de" y "incidencias. Implantación de") que NO correspondían a ningún
+`<w:u>` real — el run de `funciones` no tiene subrayado en su `rPr`.
+
+Causa: el párrafo de la cláusula PRIMERA (paraId `0C219AA1`, el que
+contiene puesto + grupo profesional + funciones + dirección) tiene 2
+formas flotantes (`mc:AlternateContent`, nombradas "Graphic 5" y
+"Graphic 6") ancladas con `positionV relativeFrom="paragraph"` y un
+offset fijo pequeño (~0,68 cm y ~1,03 cm desde el inicio del párrafo).
+Son rectángulos finos (líneas dibujadas) que en la plantilla ORIGINAL
+sirven para mostrar visualmente el hueco "______" de los campos "puesto"
+y "grupo profesional" antes de rellenarlos. Como `fill_contrato_trabajo`
+ya aplica subrayado real (`<w:u w:val="single"/>`) a esos dos campos al
+rellenarlos, estas líneas dibujadas quedan redundantes — y al ser
+`funciones` largo, el párrafo crece en altura y el texto que cae en esa
+posición fija (ya no puesto/grupo, sino parte de funciones) hereda
+visualmente la rayita.
+
+**Fix**: se eliminaron esos 2 bloques `mc:AlternateContent` de la
+plantilla maestra (a diferencia de los bloques "Group 27"/"Group 35" que
+se investigaron antes y NO había que tocar — aquellos eran checkboxes
+reales, estos son decoración de subrayado ya redundante con `<w:u>`).
+Verificado con funciones largo (7 páginas limpias, sin rayas fantasma) y
+funciones corto (puesto y grupo profesional siguen mostrando su
+subrayado real correctamente, sin regresión).
+
+Moraleja: no todos los `mc:AlternateContent` de este documento son
+checkboxes — hay que mirar cada uno con contexto (¿hay ya un `<w:u>`
+real cubriendo esa función?) antes de decidir si tocarlo.
+
 ## Despliegue
 
 - El microservicio corre en Easypanel, servicio `fistrek-doc-filler`,
