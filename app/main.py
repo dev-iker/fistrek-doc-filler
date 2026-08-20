@@ -4,21 +4,13 @@ fistrek-doc-filler
 Microservicio (FastAPI) que rellena las plantillas Word del proceso
 "En firma" de Fistrek y devuelve el PDF resultante.
 
-NO SE HA DESPLEGADO NI PROBADO EN EASYPANEL TODAVÍA. Esto es un primer
-esqueleto funcional probado solo en local (ver README.md), pendiente de:
-  - decidir si la conversión a PDF la hace este mismo contenedor
-    (LibreOffice instalado dentro) o se delega a Stirling PDF vía HTTP
-  - contenerizar y desplegar
-  - añadir autenticación (de momento no tiene ninguna)
-
 Endpoint principal:
   POST /v1/fill/{document_key}
   body: JSON con los campos que requiera esa plantilla (ver fillers.py)
   respuesta: application/pdf (bytes)
 
 document_key válidos: retribucion_flexible, confidencialidad,
-consentimiento_empleados, rml, acuse_acoso
-(el "contrato de trabajo" NO está incluido todavía — pendiente)
+consentimiento_empleados, rml, acuse_acoso, contrato_trabajo
 """
 
 import shutil
