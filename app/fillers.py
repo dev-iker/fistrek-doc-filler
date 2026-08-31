@@ -14,9 +14,15 @@ reemplaza por una versión nueva del documento, hay que re-generar el
 unpacked/ correspondiente (unzip + merge_runs.py) antes de que estas
 funciones vuelvan a funcionar, porque los huecos podrían estar
 fragmentados de otra manera.
+
+Algunos fillers (ver fill_contrato_trabajo_150) necesitan además tocar
+partes del .docx distintas de word/document.xml. Ver el apartado
+"Fillers que necesitan tocar más de un fichero" en CLAUDE.md.
 """
+
 import re
 import unicodedata
+from decimal import Decimal, ROUND_HALF_UP
 from xml.sax.saxutils import escape as _xml_escape
 
 
@@ -48,19 +54,20 @@ def _strip_decorative_marks(value: str) -> str:
     elimina.
 
     Se quitan las TRES categorías Unicode de "marca" (no solo "Mn"):
-    - Mn (Nonspacing Mark): el caso típico de tachado/subrayado hecho
-      con una marca que se dibuja sobre el carácter anterior sin
-      ocupar espacio propio (p.ej. U+0336 COMBINING LONG STROKE
-      OVERLAY, el que se genera con conversores de "texto tachado").
-    - Me (Enclosing Mark): variantes que dibujan un trazo o círculo
-      "envolviendo" el carácter (p.ej. U+20D2, U+20E5).
-    - Mc (Spacing Combining Mark): menos común para esto, pero se
-      incluye por seguridad ya que no aparece en ortografía española.
+      - Mn (Nonspacing Mark): el caso típico de tachado/subrayado hecho
+        con una marca que se dibuja sobre el carácter anterior sin
+        ocupar espacio propio (p.ej. U+0336 COMBINING LONG STROKE
+        OVERLAY, el que se genera con conversores de "texto tachado").
+      - Me (Enclosing Mark): variantes que dibujan un trazo o círculo
+        "envolviendo" el carácter (p.ej. U+20D2, U+20E5).
+      - Mc (Spacing Combining Mark): menos común para esto, pero se
+        incluye por seguridad ya que no aparece en ortografía española.
+
     También se eliminan caracteres de ancho cero (U+200B-U+200D,
     U+FEFF) que a veces acompañan a este tipo de texto "decorado".
     """
     normalized = unicodedata.normalize("NFC", value)
-    zero_width = {"​", "‌", "‍", "﻿"}
+    zero_width = {"\u200b", "\u200c", "\u200d", "\ufeff"}
     return "".join(
         ch for ch in normalized
         if unicodedata.category(ch)[0] != "M" and ch not in zero_width
@@ -222,6 +229,7 @@ def fill_rml(xml: str, *, empresa: str, puesto: str, nombre: str, dni: str, fech
         '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:cs="Arial"/><w:sz w:val="16"/>'
         f'<w:szCs w:val="16"/></w:rPr></w:pPr>{empty_run}</w:p></w:tc></w:tr></w:tbl>'
     )
+
     tbl_no = (
         '<w:tbl><w:tblPr><w:tblpPr w:vertAnchor="text" w:horzAnchor="text" w:leftFromText="141" '
         'w:rightFromText="141" w:tblpX="250" w:tblpY="121"/><w:tblW w:w="300" w:type="dxa"/>'
@@ -243,11 +251,12 @@ def fill_rml(xml: str, *, empresa: str, puesto: str, nombre: str, dni: str, fech
         xml = _repl_once(xml, tbl_si, tbl_si.replace(empty_run, x_run), "casilla SI consentimiento")
     else:
         xml = _repl_once(xml, tbl_no, tbl_no.replace(empty_run, x_run), "casilla NO consentimiento")
+
     return xml
 
 
 def fill_acuse_acoso(xml: str, *, nombre: str, dni: str, fecha_lugar: str,
-                      fecha_dia: str, fecha_mes: str, fecha_anio: str) -> str:
+                     fecha_dia: str, fecha_mes: str, fecha_anio: str) -> str:
     old_nombre = (
         '<w:color w:val="D0D5DD"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>'
         '<w:t xml:space="preserve">_______________________________________________</w:t>'
@@ -275,17 +284,23 @@ def fill_acuse_acoso(xml: str, *, nombre: str, dni: str, fecha_lugar: str,
 
 
 def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: str,
-                           num_afiliacion_ss: str, nivel_formativo: str, nacionalidad: str,
-                           municipio_domicilio: str, puesto: str, grupo_profesional: str,
-                           funciones: str, fecha_dia: str, fecha_mes: str, fecha_anio: str,
-                           periodo_prueba: str, salario: str,
-                           trabajo_a_distancia: bool = False) -> str:
+                          num_afiliacion_ss: str, nivel_formativo: str, nacionalidad: str,
+                          municipio_domicilio: str, puesto: str, grupo_profesional: str,
+                          funciones: str, fecha_dia: str, fecha_mes: str, fecha_anio: str,
+                          periodo_prueba: str, salario: str,
+                          trabajo_a_distancia: bool = False) -> str:
     """
-    Contrato de trabajo indefinido (modelo SEPE). NO incluye el anexo de
-    teletrabajo (todavía no existe como documento — pendiente de Jorge).
-    Si trabajo_a_distancia=True, se marca la casilla en la cláusula
-    correspondiente, pero el % de teletrabajo NO se usa aquí: vive en el
-    anexo aparte que se generará en el futuro.
+    Contrato de trabajo indefinido ORDINARIO (modelo SEPE código 100).
+
+    ⛔ DESACTIVADO el 31/08/2026: la gestoría cambió al modelo INDEFINIDO
+    BONIFICADO (código 150). Esta función y templates/contrato_trabajo/ se
+    conservan intactas; solo está comentada su entrada en DOCUMENT_FILLERS.
+    Para reactivarlo, descomentar esa línea. Ver CLAUDE.md.
+
+    NO incluye el anexo de teletrabajo (todavía no existe como documento —
+    pendiente de Jorge). Si trabajo_a_distancia=True, se marca la casilla en
+    la cláusula correspondiente, pero el % de teletrabajo NO se usa aquí:
+    vive en el anexo aparte que se generará en el futuro.
 
     fecha_dia/fecha_mes/fecha_anio se usan tanto para "fecha de inicio"
     (cláusula cuarta) como para el día/mes de los DOS bloques de firma del
@@ -294,7 +309,6 @@ def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: 
     en la plantilla como "2026" -- si este flujo sigue en uso en 2027,
     hay que revisar y actualizar esa parte de la plantilla maestra.
     """
-
     # --- Tabla "DATOS DEL/DE LA TRABAJADOR/A" ---
     def insertar_en_vacio(xml, paraId, valor, label):
         m = re.search(rf'(<w:p w14:paraId="{paraId}"[^>]*>.*?)(</w:p>)', xml, re.DOTALL)
@@ -319,7 +333,7 @@ def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: 
         '<w:pPr><w:pStyle w:val="TableParagraph"/>'
         '<w:rPr><w:rFonts w:ascii="Times New Roman"/><w:sz w:val="16"/></w:rPr></w:pPr>'
         '<w:r><w:rPr><w:rFonts w:ascii="Times New Roman"/><w:sz w:val="16"/></w:rPr>'
-        '<w:t xml:space="preserve">  </w:t></w:r>'
+        '<w:t xml:space="preserve"> </w:t></w:r>'
     )
     new_nivel = (
         '<w:pPr><w:pStyle w:val="TableParagraph"/><w:ind w:left="71"/>'
@@ -339,9 +353,9 @@ def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: 
 
     old_grupo = (
         '<w:r><w:rPr><w:sz w:val="18"/><w:u w:val="single"/></w:rPr>'
-        '<w:t xml:space="preserve">     </w:t></w:r>'
+        '<w:t xml:space="preserve"> </w:t></w:r>'
         '<w:r><w:rPr><w:spacing w:val="80"/><w:sz w:val="18"/><w:u w:val="single"/></w:rPr>'
-        '<w:t xml:space="preserve">  </w:t></w:r>'
+        '<w:t xml:space="preserve"> </w:t></w:r>'
     )
     new_grupo = f'<w:r><w:rPr><w:sz w:val="18"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">{_esc(grupo_profesional)}</w:t></w:r>'
     xml = _repl_once(xml, old_grupo, new_grupo, "grupo profesional")
@@ -404,16 +418,16 @@ def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: 
     xml = _repl_once(xml, old_periodicidad, new_periodicidad, "periodicidad salario")
 
     # --- Fecha de firma (aparece 2 veces: contrato base + anexo de cláusulas adicionales) ---
-    old_dia1 = '<w:t xml:space="preserve">a  de</w:t>'
+    old_dia1 = '<w:t xml:space="preserve">a de</w:t>'
     new_dia1 = f'<w:t xml:space="preserve">a {_esc(fecha_dia)} de</w:t>'
     xml = _repl_once(xml, old_dia1, new_dia1, "día firma (bloque 1)")
 
-    old_dia2 = '<w:t xml:space="preserve">a  de </w:t>'
+    old_dia2 = '<w:t xml:space="preserve">a de </w:t>'
     new_dia2 = f'<w:t xml:space="preserve">a {_esc(fecha_dia)} de </w:t>'
     xml = _repl_once(xml, old_dia2, new_dia2, "día firma (bloque 2)")
 
     old_mes = (
-        '<w:r><w:rPr><w:spacing w:val="40"/><w:sz w:val="12"/></w:rPr><w:t xml:space="preserve">  </w:t></w:r>'
+        '<w:r><w:rPr><w:spacing w:val="40"/><w:sz w:val="12"/></w:rPr><w:t xml:space="preserve"> </w:t></w:r>'
         '<w:r><w:rPr><w:sz w:val="12"/></w:rPr><w:t>de 2026</w:t></w:r>'
     )
     n_mes = xml.count(old_mes)
@@ -426,7 +440,7 @@ def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: 
     xml = xml.replace(old_mes, new_mes)
 
     # --- Salto de página forzado antes del bloque "INDEFINIDO ORDINARIO" /
-    # "CÓDIGO DE CONTRATO" ---
+    #     "CÓDIGO DE CONTRATO" ---
     # Ese bloque (casilla "INDEFINIDO ORDINARIO" + tabla "CÓDIGO DE
     # CONTRATO") se dibuja con formas ancladas a coordenadas ABSOLUTAS de
     # página (w10:wrap/wp:anchor con relativeFrom="page"), calibradas
@@ -456,12 +470,250 @@ def fill_contrato_trabajo(xml: str, *, nombre: str, dni: str, fecha_nacimiento: 
     return xml
 
 
-# Registro de documentos disponibles: key -> (nombre carpeta template, función de relleno)
+# ---------------------------------------------------------------------
+# Helpers específicos del Modelo 150
+# ---------------------------------------------------------------------
+
+# Un "hueco" en esta plantilla es un <w:t> que solo contiene espacios y/o
+# guiones bajos (a diferencia de contrato_trabajo, donde había 4 mecanismos
+# distintos). Se localiza a partir de un ancla de texto contiguo, que se
+# valida como única igual que hace _repl_once.
+_HUECO_150 = re.compile(r'<w:t(?: [^>]*)?>([\s_]*)</w:t>')
+_RUN_VACIO_150 = re.compile(r'<w:r>(<w:rPr>.*?</w:rPr>)</w:r>', re.DOTALL)
+_RPR_150 = re.compile(r'<w:rPr>.*?</w:rPr>', re.DOTALL)
+
+
+def _rellenar_hueco_150(xml: str, ancla: str, valor: str, label: str, ventana: int = 700) -> str:
+    """Rellena el primer hueco que aparece después de `ancla`."""
+    n = xml.count(ancla)
+    if n != 1:
+        raise FillError(f"{label}: el ancla aparece {n} veces en la plantilla, se esperaba 1")
+    inicio = xml.index(ancla) + len(ancla)
+    m = _HUECO_150.search(xml, inicio, inicio + ventana)
+    if not m:
+        raise FillError(f"{label}: no se encontró hueco en los {ventana} caracteres tras el ancla")
+    return xml[:m.start()] + f'<w:t xml:space="preserve">{_esc(valor)}</w:t>' + xml[m.end():]
+
+
+def _rellenar_celda_150(xml: str, etiqueta: str, valor: str, label: str) -> str:
+    """
+    Rellena la celda de la tabla "DATOS DEL/DE LA TRABAJADOR/A" que lleva
+    `etiqueta`. Hay tres formas de hueco según la celda:
+      a) un <w:t> de solo espacios detrás de la etiqueta,
+      b) un <w:r> sin <w:t> (párrafo vacío) al que hay que insertarle texto,
+      c) solo la etiqueta (y a veces un <w:br/>): se añade un run nuevo.
+    """
+    marca = f'>{etiqueta}</w:t>'
+    n = xml.count(marca)
+    if n != 1:
+        raise FillError(f"{label}: la etiqueta {etiqueta!r} aparece {n} veces, se esperaba 1")
+
+    pos = xml.index(marca)
+    ini_celda = xml.rfind("<w:tc>", 0, pos)
+    if ini_celda < 0:
+        raise FillError(f"{label}: no se localizó la celda contenedora")
+    fin_celda = xml.index("</w:tc>", pos) + len("</w:tc>")
+    celda = xml[ini_celda:fin_celda]
+    desde = celda.index(marca)
+
+    m = _HUECO_150.search(celda, desde)
+    if m:
+        nueva = celda[:m.start()] + f'<w:t xml:space="preserve">{_esc(valor)}</w:t>' + celda[m.end():]
+        return xml[:ini_celda] + nueva + xml[fin_celda:]
+
+    m = _RUN_VACIO_150.search(celda, desde)
+    if m:
+        run = f'<w:r>{m.group(1)}<w:t xml:space="preserve">{_esc(valor)}</w:t></w:r>'
+        nueva = celda[:m.start()] + run + celda[m.end():]
+        return xml[:ini_celda] + nueva + xml[fin_celda:]
+
+    cierre = celda.rfind("</w:p>")
+    if cierre == -1:
+        raise FillError(f"{label}: la celda de {etiqueta!r} no tiene ningún párrafo")
+    rpr = ""
+    for candidato in reversed(_RPR_150.findall(celda[:cierre])):
+        if "<w:b/>" not in candidato:  # el run de la etiqueta va en negrita
+            rpr = candidato
+            break
+    run = f'<w:r>{rpr}<w:t xml:space="preserve">{_esc(valor)}</w:t></w:r>'
+    nueva = celda[:cierre] + run + celda[cierre:]
+    return xml[:ini_celda] + nueva + xml[fin_celda:]
+
+
+_MESES_150 = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
+    "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
+    "noviembre": 11, "diciembre": 12,
+}
+
+
+def _parsear_importe_es(valor) -> Decimal:
+    """Acepta 41000, '41.000', '41.000,50', 41000.0 -> Decimal."""
+    if isinstance(valor, Decimal):
+        return valor
+    if isinstance(valor, (int, float)):
+        return Decimal(str(valor))
+    s = str(valor).strip().replace("€", "").replace(" ", "")
+    if not s:
+        raise FillError("salario vacío")
+    if "," in s:
+        s = s.replace(".", "").replace(",", ".")
+    elif s.count(".") > 1 or (s.count(".") == 1 and len(s.split(".")[1]) == 3):
+        s = s.replace(".", "")
+    try:
+        return Decimal(s)
+    except Exception as exc:
+        raise FillError(f"no se pudo interpretar el salario: {valor!r}") from exc
+
+
+def _formatear_euros_es(cantidad: Decimal) -> str:
+    """Decimal('1250.5') -> '1.250,50€'"""
+    entero, decimal = f"{cantidad:.2f}".split(".")
+    grupos = []
+    while len(entero) > 3:
+        grupos.insert(0, entero[-3:])
+        entero = entero[:-3]
+    grupos.insert(0, entero)
+    return f"{'.'.join(grupos)},{decimal}€"
+
+
+def calcular_compensacion_no_competencia(salario_anual) -> str:
+    """
+    Cláusula adicional QUINTA: 10% de la remuneración fija bruta MENSUAL.
+
+    Se calcula con Decimal y ROUND_HALF_UP (criterio contable), NO con
+    round() de Python, que usa redondeo bancario y daría importes
+    incorrectos en un concepto que acaba en la nómina.
+    """
+    anual = _parsear_importe_es(salario_anual)
+    if anual <= 0:
+        raise FillError(f"salario debe ser positivo, recibido: {anual}")
+    mensual = anual / Decimal("12")
+    importe = (mensual * Decimal("0.10")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return _formatear_euros_es(importe)
+
+
+def _fecha_inicio_ddmmaa(fecha_dia: str, fecha_mes: str, fecha_anio: str) -> str:
+    """'16', 'MARZO', '2026' -> '16/03/26' (formato del modelo 150)."""
+    mes = _MESES_150.get(str(fecha_mes).strip().lower())
+    if mes is None:
+        try:
+            mes = int(str(fecha_mes).strip())
+        except ValueError:
+            raise FillError(f"mes no reconocido: {fecha_mes!r}")
+    anio = str(fecha_anio).strip()[-2:]
+    return f"{int(str(fecha_dia).strip()):02d}/{mes:02d}/{anio}"
+
+
+# ---------------------------------------------------------------------
+# Modelo 150 — INDEFINIDO BONIFICADO
+# ---------------------------------------------------------------------
+
+def fill_contrato_trabajo_150(
+    xml: str, *,
+    nombre: str, dni: str, fecha_nacimiento: str, num_afiliacion_ss: str,
+    nivel_formativo: str, nacionalidad: str, puesto: str, grupo_profesional: str,
+    periodo_prueba: str, salario: str,
+    fecha_dia: str, fecha_mes: str, fecha_anio: str,
+    municipio_domicilio: str = "", pais_domicilio: str = "",
+    fecha_inicio: str = "", horas_semana: str = "40",
+    jornada_desde: str = "Lunes", jornada_hasta: str = "Viernes",
+    partes: dict | None = None,
+) -> dict:
+    """
+    Contrato de trabajo INDEFINIDO BONIFICADO (modelo SEPE código 150).
+
+    Sustituye a `contrato_trabajo` (INDEFINIDO ORDINARIO), que queda
+    desregistrado pero con su código y plantilla intactos.
+
+    Diferencias relevantes respecto al anterior:
+      - No tiene campo `funciones` ni casilla "Trabajo a distancia".
+      - Añade la cláusula adicional SÉPTIMA de I+D+i.
+      - La compensación del pacto de no competencia es un campo CALCULADO
+        a partir del salario (10% de la mensualidad), no un dato de entrada.
+      - La fecha de firma del pie ("En BARCELONA a __ de __ de __") vive en
+        word/footer1.xml, no en document.xml, así que esta función NO la
+        rellena: main.py solo entrega document.xml al filler.
+    """
+    # --- Tabla "DATOS DEL/DE LA TRABAJADOR/A" ---
+    xml = _rellenar_celda_150(xml, "D./DÑA.", nombre, "nombre trabajador")
+    xml = _rellenar_celda_150(xml, "NIF/NIE (2)", dni, "NIF/NIE trabajador")
+    xml = _rellenar_celda_150(xml, "FECHA DE NACIMIENTO", fecha_nacimiento, "fecha nacimiento")
+    xml = _rellenar_celda_150(xml, "Nº AFILIACIÓN  S. S.", num_afiliacion_ss, "nº afiliación SS")
+    xml = _rellenar_celda_150(xml, "NIVEL FORMATIVO", nivel_formativo, "nivel formativo")
+    xml = _rellenar_celda_150(xml, "NACIONALIDAD", nacionalidad, "nacionalidad")
+    if municipio_domicilio:
+        xml = _rellenar_celda_150(xml, "MUNICIPIO DEL DOMICILIO", municipio_domicilio, "municipio domicilio")
+    if pais_domicilio:
+        xml = _rellenar_celda_150(xml, "PAÍS DOMICILIO ", pais_domicilio, "país domicilio")
+
+    # --- Cláusula PRIMERA: puesto y categoría profesional ---
+    # El guion bajo suelto tras "de" forma parte del hueco original.
+    xml = _repl_once(
+        xml,
+        "categoría   o nivel profesional de            _",
+        "categoría   o nivel profesional de",
+        "guion suelto de categoría profesional",
+    )
+    xml = _rellenar_hueco_150(xml, "prestará  sus  servicios  como  (4)", puesto, "puesto")
+    # el espacio va dentro del valor: el <w:t> del ancla no lleva
+    # xml:space="preserve" y Word/LibreOffice recortarían un espacio final
+    xml = _rellenar_hueco_150(xml, "categoría   o nivel profesional de", f" {grupo_profesional}", "categoría profesional")
+
+    # --- Cláusula SEGUNDA: fecha de inicio y período de prueba ---
+    inicio = fecha_inicio or _fecha_inicio_ddmmaa(fecha_dia, fecha_mes, fecha_anio)
+    xml = _rellenar_hueco_150(xml, "iniciándose la relación laboral con fecha", inicio, "fecha de inicio")
+    xml = _rellenar_hueco_150(xml, "un período de prueba de  (5)", periodo_prueba, "período de prueba")
+
+    # --- Cláusula TERCERA: jornada ---
+    xml = _rellenar_hueco_150(xml, "la jornada de trabajo será de", horas_semana, "horas semanales")
+    xml = _rellenar_hueco_150(xml, "horas semanales, prestadas de", jornada_desde, "jornada desde")
+    xml = _rellenar_hueco_150(xml, "horas semanales, prestadas de", jornada_hasta, "jornada hasta")
+
+    # --- Cláusula QUINTA: salario ---
+    xml = _rellenar_hueco_150(xml, "percibirá una retribución total de", salario, "salario")
+
+    # --- Cláusula adicional QUINTA: compensación por no competencia (calculada) ---
+    xml = _repl_once(
+        xml,
+        "{{COMPENSACION_NO_COMPETENCIA}}",
+        _esc(calcular_compensacion_no_competencia(salario)),
+        "compensación pacto de no competencia",
+    )
+
+    # --- Pie: fecha de firma (word/footer1.xml) ---
+    if partes is None or "word/footer1.xml" not in partes:
+        raise FillError(
+            "no se recibió word/footer1.xml: main.py debe pasar el parámetro "
+            "`partes` para poder rellenar la fecha de firma"
+        )
+    pie = partes["word/footer1.xml"]
+    # Los tres huecos (día, mes, año) cuelgan del mismo ancla y se rellenan
+    # en orden: cada uno deja de ser "solo espacios" al rellenarse, así que
+    # la llamada siguiente cae en el hueco posterior.
+    ancla_pie = '<w:t xml:space="preserve"> a </w:t>'
+    pie = _rellenar_hueco_150(pie, ancla_pie, fecha_dia, "día firma", ventana=1200)
+    pie = _rellenar_hueco_150(pie, ancla_pie, fecha_mes, "mes firma", ventana=1200)
+    pie = _rellenar_hueco_150(pie, ancla_pie, fecha_anio, "año firma", ventana=1200)
+
+    return {"word/document.xml": xml, "word/footer1.xml": pie}
+
+
+# ---------------------------------------------------------------------
+# Registro de documentos disponibles
+# ---------------------------------------------------------------------
+
 DOCUMENT_FILLERS = {
     "retribucion_flexible": fill_retribucion_flexible,
     "confidencialidad": fill_confidencialidad,
     "consentimiento_empleados": fill_consentimiento_empleados,
     "rml": fill_rml,
     "acuse_acoso": fill_acuse_acoso,
-    "contrato_trabajo": fill_contrato_trabajo,
+    "contrato_trabajo_150": fill_contrato_trabajo_150,
+
+    # DESACTIVADO (31/08/2026): la gestoría cambió el modelo de contrato del
+    # INDEFINIDO ORDINARIO (código 100) al INDEFINIDO BONIFICADO (código 150).
+    # La función fill_contrato_trabajo y templates/contrato_trabajo/ se
+    # conservan intactas: para reactivarlo basta descomentar esta línea.
+    # "contrato_trabajo": fill_contrato_trabajo,
 }
