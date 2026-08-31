@@ -5,12 +5,12 @@ Microservicio (FastAPI) que rellena las plantillas Word del proceso
 "En firma" de Fistrek y devuelve el PDF resultante.
 
 Endpoint principal:
-  POST /v1/fill/{document_key}
-  body: JSON con los campos que requiera esa plantilla (ver fillers.py)
-  respuesta: application/pdf (bytes)
+    POST /v1/fill/{document_key}
+    body: JSON con los campos que requiera esa plantilla (ver fillers.py)
+    respuesta: application/pdf (bytes)
 
 document_key válidos: retribucion_flexible, confidencialidad,
-consentimiento_empleados, rml, acuse_acoso, contrato_trabajo
+consentimiento_empleados, rml, acuse_acoso, contrato_trabajo_150
 """
 
 import shutil
@@ -42,9 +42,9 @@ class FillRequest(BaseModel):
     fecha_dia: str | None = None
     fecha_mes: str | None = None
     fecha_anio: str | None = None
-    fecha: str | None = None          # para plantillas que ya usan fecha "d de mes de aaaa" en un solo campo
+    fecha: str | None = None  # para plantillas que ya usan fecha "d de mes de aaaa" en un solo campo
     fecha_lugar: str | None = None
-    consentimiento_si: bool = True    # solo aplica a "rml"
+    consentimiento_si: bool = True  # solo aplica a "rml"
 
     # Campos del Contrato de Trabajo
     fecha_nacimiento: str | None = None
@@ -57,6 +57,14 @@ class FillRequest(BaseModel):
     periodo_prueba: str | None = None
     salario: str | None = None
     trabajo_a_distancia: bool = False
+
+    # Campos del Contrato de Trabajo Modelo 150 (INDEFINIDO BONIFICADO).
+    # fecha_inicio es opcional: si no llega, fill_contrato_trabajo_150 la
+    # calcula a partir de fecha_dia/fecha_mes/fecha_anio en formato dd/mm/aa.
+    fecha_inicio: str | None = None
+    horas_semana: str | None = None      # por defecto "40"
+    jornada_desde: str | None = None     # por defecto "Lunes"
+    jornada_hasta: str | None = None     # por defecto "Viernes"
 
     # Campos adicionales del OCR del DNI (no usados directamente por
     # fill_contrato_trabajo hoy, pero aceptados para no romper el body
@@ -128,14 +136,46 @@ def fill_document(document_key: str, req: FillRequest):
         params = inspect.signature(filler_fn).parameters
         kwargs = {k: v for k, v in req.model_dump().items() if k in params and v is not None}
 
+        # Algunas plantillas tienen huecos fuera de word/document.xml. El
+        # contrato 150, por ejemplo, lleva la fecha de firma en el pie
+        # (word/footer1.xml), porque el documento original de la gestoría
+        # tiene 3 secciones con pies distintos.
+        #
+        # Convenio: si la función de relleno declara el parámetro `partes`,
+        # se le entrega un dict {ruta_relativa: xml} con todas las partes
+        # XML de word/ y debe devolver otro dict con las que haya
+        # modificado. Si no lo declara, sigue recibiendo y devolviendo solo
+        # el str de document.xml, como hasta ahora.
+        if "partes" in params:
+            kwargs["partes"] = {
+                f"word/{f.name}": f.read_text(encoding="utf-8")
+                for f in sorted((work_dir / "word").glob("*.xml"))
+            }
+
         try:
-            xml = filler_fn(xml, **kwargs)
+            resultado = filler_fn(xml, **kwargs)
         except FillError as e:
             raise HTTPException(status_code=422, detail=str(e))
         except TypeError as e:
             raise HTTPException(status_code=422, detail=f"faltan campos para '{document_key}': {e}")
 
-        doc_xml_path.write_text(xml, encoding="utf-8")
+        if isinstance(resultado, dict):
+            if "word/document.xml" not in resultado:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"'{document_key}' devolvió partes sin incluir word/document.xml",
+                )
+            raiz = work_dir.resolve()
+            for rel, contenido in resultado.items():
+                destino = (work_dir / rel).resolve()
+                # El filler no debe poder escribir fuera del paquete.
+                if not destino.is_relative_to(raiz) or not destino.exists():
+                    raise HTTPException(
+                        status_code=500, detail=f"parte inválida devuelta por el filler: {rel}"
+                    )
+                destino.write_text(contenido, encoding="utf-8")
+        else:
+            doc_xml_path.write_text(resultado, encoding="utf-8")
 
         docx_path = tmp_path / f"{document_key}_{uuid.uuid4().hex}.docx"
         _zip_dir(work_dir, docx_path)
