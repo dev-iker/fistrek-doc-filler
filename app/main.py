@@ -44,7 +44,7 @@ class FillRequest(BaseModel):
     fecha_anio: str | None = None
     fecha: str | None = None  # para plantillas que ya usan fecha "d de mes de aaaa" en un solo campo
     fecha_lugar: str | None = None
-    consentimiento_si: bool = True  # solo aplica a "rml"
+    consentimiento_si: bool | None = None
 
     # Campos del Contrato de Trabajo
     fecha_nacimiento: str | None = None
