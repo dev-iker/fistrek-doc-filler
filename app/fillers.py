@@ -163,7 +163,7 @@ def fill_consentimiento_empleados(xml: str, *, nombre: str, dni: str, fecha: str
 
 
 def fill_rml(xml: str, *, empresa: str, puesto: str, nombre: str, dni: str, fecha_lugar: str,
-             fecha_dia: str, fecha_mes: str, fecha_anio: str, consentimiento_si: bool = True) -> str:
+             fecha_dia: str, fecha_mes: str, fecha_anio: str, consentimiento_si: bool | None = None) -> str:
     xml = _repl_once(
         xml,
         '<w:t xml:space="preserve"> ...............................................................</w:t>',
@@ -247,9 +247,9 @@ def fill_rml(xml: str, *, empresa: str, puesto: str, nombre: str, dni: str, fech
         f'<w:szCs w:val="16"/></w:rPr></w:pPr>{empty_run}</w:p></w:tc></w:tr></w:tbl>'
     )
 
-    if consentimiento_si:
+    if consentimiento_si is True:
         xml = _repl_once(xml, tbl_si, tbl_si.replace(empty_run, x_run), "casilla SI consentimiento")
-    else:
+    elif consentimiento_si is False:
         xml = _repl_once(xml, tbl_no, tbl_no.replace(empty_run, x_run), "casilla NO consentimiento")
 
     return xml
